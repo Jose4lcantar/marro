@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_blue/flutter_blue.dart';
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'dart:convert';
+import 'dart:typed_data'; // Agrega esta línea para importar Uint8List
+
+void main() {
+  runApp(MaterialApp(
+    home: BluetoothPage(),
+  ));
+}
 
 class BluetoothPage extends StatefulWidget {
   @override
@@ -8,10 +15,10 @@ class BluetoothPage extends StatefulWidget {
 }
 
 class _BluetoothPageState extends State<BluetoothPage> {
-  FlutterBlue flutterBlue = FlutterBlue.instance;
+  FlutterBluetoothSerial bluetooth = FlutterBluetoothSerial.instance;
   List<BluetoothDevice> devices = [];
   BluetoothDevice? selectedDevice;
-  BluetoothCharacteristic? characteristic;
+  BluetoothConnection? connection;
   bool isScanning = false;
   String temperature = '0 °C';
 
@@ -36,8 +43,8 @@ class _BluetoothPageState extends State<BluetoothPage> {
                   itemBuilder: (context, index) {
                     final device = devices[index];
                     return ListTile(
-                      title: Text(device.name),
-                      subtitle: Text(device.id.toString()),
+                      title: Text(device.name ?? ''),
+                      subtitle: Text(device.address),
                       onTap: () {
                         connectToDevice(device);
                       },
@@ -65,25 +72,19 @@ class _BluetoothPageState extends State<BluetoothPage> {
       devices.clear();
     });
 
-    flutterBlue.startScan(timeout: Duration(seconds: 4)).then((_) {
+    bluetooth.startDiscovery().listen((BluetoothDiscoveryResult result) {
       setState(() {
-        isScanning = false;
+        devices.add(result.device);
       });
     });
 
-    flutterBlue.scanResults.listen((List<ScanResult> results) {
-      for (ScanResult result in results) {
-        if (!devices.contains(result.device)) {
-          setState(() {
-            devices.add(result.device);
-          });
-        }
-      }
+    Future.delayed(Duration(seconds: 4), () {
+      stopScan();
     });
   }
 
   void stopScan() {
-    flutterBlue.stopScan();
+    bluetooth.cancelDiscovery();
     setState(() {
       isScanning = false;
     });
@@ -91,47 +92,22 @@ class _BluetoothPageState extends State<BluetoothPage> {
 
   void connectToDevice(BluetoothDevice device) async {
     try {
-      await device.connect(autoConnect: false, timeout: Duration(seconds: 10));
+      BluetoothConnection connection = await BluetoothConnection.toAddress(device.address);
       setState(() {
         selectedDevice = device;
+        this.connection = connection;
       });
-      discoverServices(device);
+      _startListening();
     } catch (e) {
       print('Error connecting to Bluetooth device: $e');
     }
   }
 
-  void discoverServices(BluetoothDevice device) async {
-    try {
-      List<BluetoothService> services = await device.discoverServices();
-      for (BluetoothService service in services) {
-        for (BluetoothCharacteristic c in service.characteristics) {
-          if (c.properties.notify) {
-            setState(() {
-              characteristic = c;
-            });
-
-            // Escucha por nuevos valores
-            characteristic!.setNotifyValue(true);
-            characteristic!.value.listen((value) {
-              setState(() {
-                String data = utf8.decode(value);
-                // Procesa los datos
-                temperature = data;
-              });
-            });
-            break;
-          }
-        }
-      }
-    } catch (e) {
-      print('Error discovering services: $e');
-    }
+  void _startListening() {
+    connection!.input!.listen((Uint8List data) {
+      setState(() {
+        temperature = String.fromCharCodes(data);
+      });
+    });
   }
-}
-
-void main() {
-  runApp(MaterialApp(
-    home: BluetoothPage(),
-  ));
 }

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'dart:convert';
-import 'dart:typed_data'; // Agrega esta línea para importar Uint8List
+import 'dart:typed_data';
+import 'package:syncfusion_flutter_gauges/gauges.dart';
 
 void main() {
   runApp(MaterialApp(
@@ -20,7 +21,7 @@ class _BluetoothPageState extends State<BluetoothPage> {
   BluetoothDevice? selectedDevice;
   BluetoothConnection? connection;
   bool isScanning = false;
-  String temperature = '0 °C';
+  String temperature = '0';
 
   @override
   Widget build(BuildContext context) {
@@ -57,8 +58,23 @@ class _BluetoothPageState extends State<BluetoothPage> {
               child: Text(isScanning ? 'Detener búsqueda' : 'Buscar Dispositivos'),
             ),
             SizedBox(height: 20),
+            SfRadialGauge(
+              axes: <RadialAxis>[
+                RadialAxis(
+                  minimum: 0,
+                  maximum: 100,
+                  ranges: <GaugeRange>[
+                    GaugeRange(startValue: 0, endValue: 100, color: Colors.green)
+                  ],
+                  pointers: <GaugePointer>[
+                    NeedlePointer(value: double.parse(temperature)) // Actualizamos el valor del puntero con la temperatura actual
+                  ],
+                )
+              ],
+            ),
+            SizedBox(height: 20),
             Text(
-              'Temperature: $temperature',
+              'Temperature: $temperature °C',
             ),
           ],
         ),
@@ -105,9 +121,23 @@ class _BluetoothPageState extends State<BluetoothPage> {
 
   void _startListening() {
     connection!.input!.listen((Uint8List data) {
-      setState(() {
-        temperature = String.fromCharCodes(data);
-      });
+      String receivedData = String.fromCharCodes(data);
+      if (_isValidTemperature(receivedData)) {
+        setState(() {
+          temperature = receivedData.replaceAll(RegExp(r'[^0-9.]'), '');
+        });
+      } else {
+        print('Received invalid temperature data: $receivedData');
+      }
     });
+  }
+
+  bool _isValidTemperature(String data) {
+    try {
+      double.parse(data.replaceAll(RegExp(r'[^0-9.]'), ''));
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 }

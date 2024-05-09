@@ -3,6 +3,7 @@ import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
+import 'package:permission_handler/permission_handler.dart'; // Importa el paquete para manejar permisos
 
 void main() {
   runApp(MaterialApp(
@@ -82,21 +83,25 @@ class _BluetoothPageState extends State<BluetoothPage> {
     );
   }
 
-  void startScan() {
-    setState(() {
-      isScanning = true;
-      devices.clear();
-    });
-
-    bluetooth.startDiscovery().listen((BluetoothDiscoveryResult result) {
+  void startScan() async {
+    if (await Permission.location.request().isGranted) {
       setState(() {
-        devices.add(result.device);
+        isScanning = true;
+        devices.clear();
       });
-    });
 
-    Future.delayed(Duration(seconds: 4), () {
-      stopScan();
-    });
+      bluetooth.startDiscovery().listen((BluetoothDiscoveryResult result) {
+        setState(() {
+          devices.add(result.device);
+        });
+      });
+
+      Future.delayed(Duration(seconds: 4), () {
+        stopScan();
+      });
+    } else {
+      // El usuario denegó el permiso de ubicación, maneja este caso apropiadamente
+    }
   }
 
   void stopScan() {
